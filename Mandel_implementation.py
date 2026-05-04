@@ -100,4 +100,55 @@ def mandelbrot_multiprocessing(
         for row_start, band in pool.map(_compute_row_chunk, chunks):
             result[row_start: row_start + len(band)] = band
     return result 
+
+ # Implementation 4 – Dask
+# ─────────────────────────────────────────────────────────────────────────────
+ 
+def mandelbrot_dask(
+    xmin: float, xmax: float,
+    ymin: float, ymax: float,
+    width: int, height: int,
+    max_iter: int = 256,
+    chunk_size: int = 256,
+) -> np.ndarray:
+    
+    try:
+        import dask
+        import dask.array as da
+    except ImportError:
+        print("  [WARNING] Dask not installed – using NumPy vectorised")
+        return mandelbrot_numpy(xmin, xmax, ymin, ymax, width, height, max_iter)
+ 
+    xs = np.linspace(xmin, xmax, width)
+    ys = np.linspace(ymin, ymax, height)
+ 
+    @dask.delayed
+    def _chunk(y_slice):
+        ys_local = ys[y_slice]
+        return mandelbrot_numpy.__wrapped__ \
+            if hasattr(mandelbrot_numpy, '__wrapped__') else \
+            _numpy_chunk(xs, ys_local, max_iter)
+ 
+    def _numpy_chunk(xs_arr, ys_arr, mi):
+        C  = xs_arr[np.newaxis, :] + 1j * ys_arr[:, np.newaxis]
+        Z  = np.zeros_like(C)
+        cnt = np.zeros(C.shape, dtype=np.int32)
+        active = np.ones(C.shape, dtype=bool)
+        for k in range(mi):
+            Z[active] = Z[active] ** 2 + C[active]
+            esc = active & (np.abs(Z) > 2.0)
+            cnt[esc] = k + 1
+            active &= ~esc
+            if not active.any():
+                break
+        cnt[active] = mi
+        return cnt
+ 
+    slices = [slice(i, min(i + chunk_size, height))
+              for i in range(0, height, chunk_size)]
+ 
+    delayed_chunks = [dask.delayed(_numpy_chunk)(xs, ys[sl], max_iter)
+                      for sl in slices]
+    results = dask.compute(*delayed_chunks)
+    return np.vstack(results)
  
