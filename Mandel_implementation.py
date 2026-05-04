@@ -59,3 +59,45 @@ def mandelbrot_numpy(
  
     count[active] = max_iter   # pixels that never escaped
     return count
+
+
+# Implementation 3 – Multiprocessing
+# ─────────────────────────────────────────────────────────────────────────────
+ 
+def _compute_row_chunk(args):
+   
+    row_start, row_end, xs, ys, max_iter = args
+    local_ys = ys[row_start:row_end]
+    band = np.empty((len(local_ys), len(xs)), dtype=np.int32)
+    for i, y in enumerate(local_ys):
+        for j, x in enumerate(xs):
+            band[i, j] = mandelbrot_scalar(complex(x, y), max_iter)
+    return row_start, band
+ 
+ 
+def mandelbrot_multiprocessing(
+    xmin: float, xmax: float,
+    ymin: float, ymax: float,
+    width: int, height: int,
+    max_iter: int = 256,
+    n_workers: int = 4,
+) -> np.ndarray:
+    
+    import multiprocessing as mp
+ 
+    xs = np.linspace(xmin, xmax, width)
+    ys = np.linspace(ymin, ymax, height)
+ 
+    # Build (row_start, row_end) chunks
+    chunk_size = math.ceil(height / n_workers)
+    chunks = [
+        (i, min(i + chunk_size, height), xs, ys, max_iter)
+        for i in range(0, height, chunk_size)
+    ]
+ 
+    result = np.empty((height, width), dtype=np.int32)
+    with mp.Pool(processes=n_workers) as pool:
+        for row_start, band in pool.map(_compute_row_chunk, chunks):
+            result[row_start: row_start + len(band)] = band
+    return result 
+ 
