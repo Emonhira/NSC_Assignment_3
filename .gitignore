@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+*.egg-info/
+.env
+scaling_plot.png
+mandelbrot_preview.png
