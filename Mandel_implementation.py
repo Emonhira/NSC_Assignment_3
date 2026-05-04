@@ -283,4 +283,18 @@ class TestDocstrings(unittest.TestCase):
         )
         self.assertEqual(results.failed, 0,
             f"{results.failed} doctest(s) failed")
-      
+ 
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--benchmark", action="store_true",
+                        help="Run timing benchmarks across implementations")
+    parser.add_argument("--test", action="store_true",
+                        help="Run unit-test suite")
+    args = parser.parse_args()
+ 
+    if args.test:
+        unittest.main(argv=[""], exit=False, verbosity=2)
+ 
+    if args.benchmark or not args.test:
+        run_benchmarks()      
+        
