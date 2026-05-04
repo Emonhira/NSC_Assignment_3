@@ -187,4 +187,100 @@ def run_benchmarks(sizes=None, max_iter=256):
         print(row)
  
     print("=" * len(header))
-     
+# Unit tests (pytest-compatible; also works with python -m pytest)
+# ─────────────────────────────────────────────────────────────────────────────
+ 
+class TestMandelbrotScalar(unittest.TestCase):
+    """Tests for the scalar iteration function."""
+ 
+    def test_origin_inside_set(self):
+        """c = 0+0j  iterates z = 0 forever → must return max_iter."""
+        self.assertEqual(mandelbrot_scalar(0 + 0j, max_iter=100), 100)
+ 
+    def test_clearly_outside(self):
+        """c = 3+3j  escapes on the very first iteration."""
+        result = mandelbrot_scalar(3 + 3j, max_iter=100)
+        self.assertLess(result, 100)
+        self.assertGreaterEqual(result, 1)
+ 
+    def test_max_iter_respected(self):
+        """Return value is always <= max_iter."""
+        for c in [0+0j, -0.5+0j, 0.3+0.5j, 2+0j, -2+0j]:
+            with self.subTest(c=c):
+                self.assertLessEqual(mandelbrot_scalar(c, max_iter=50), 50)
+ 
+    def test_boundary_escape(self):
+        """A point just outside the cardioid escapes quickly; c=2+0j escapes."""
+        result = mandelbrot_scalar(2 + 0j, max_iter=256)
+        self.assertLess(result, 256)
+ 
+    def test_negative_real_inside(self):
+        """-0.5+0j is well inside the set for any reasonable max_iter."""
+        self.assertEqual(mandelbrot_scalar(-0.5 + 0j, max_iter=200), 200)
+ 
+ 
+class TestMandelbrotNaive(unittest.TestCase):
+    """Tests for the naive double-loop implementation."""
+ 
+    def test_output_shape(self):
+        img = mandelbrot_naive(-2, 1, -1.5, 1.5, 10, 8, max_iter=50)
+        self.assertEqual(img.shape, (8, 10))
+ 
+    def test_output_dtype(self):
+        img = mandelbrot_naive(-2, 1, -1.5, 1.5, 4, 4, max_iter=50)
+        self.assertEqual(img.dtype, np.int32)
+ 
+    def test_centre_inside_set(self):
+        """The pixel closest to 0+0j should return max_iter."""
+        img = mandelbrot_naive(-1, 1, -1, 1, 3, 3, max_iter=200)
+        self.assertEqual(int(img[1, 1]), 200)
+ 
+    def test_corner_outside_set(self):
+        """The top-right corner (2+2j region) should escape before max_iter."""
+        img = mandelbrot_naive(-2, 2, -2, 2, 5, 5, max_iter=100)
+        self.assertLess(int(img[0, -1]), 100)
+ 
+    def test_values_in_range(self):
+        """All counts must be in [1, max_iter]."""
+        mi = 75
+        img = mandelbrot_naive(-2, 1, -1.5, 1.5, 20, 20, max_iter=mi)
+        self.assertTrue((img >= 1).all())
+        self.assertTrue((img <= mi).all())
+ 
+ 
+class TestNumpyMatchesNaive(unittest.TestCase):
+    """Cross-implementation correctness tests."""
+ 
+    PARAMS = dict(xmin=-2, xmax=1, ymin=-1.5, ymax=1.5,
+                  width=16, height=16, max_iter=64)
+ 
+    def test_numpy_matches_naive(self):
+        ref  = mandelbrot_naive(**self.PARAMS)
+        fast = mandelbrot_numpy(**self.PARAMS)
+        np.testing.assert_array_equal(ref, fast,
+            err_msg="NumPy result does not match naive reference")
+ 
+    def test_multiprocessing_matches_naive(self):
+        ref = mandelbrot_naive(**self.PARAMS)
+        mp  = mandelbrot_multiprocessing(**self.PARAMS, n_workers=2)
+        np.testing.assert_array_equal(ref, mp,
+            err_msg="Multiprocessing result does not match naive reference")
+ 
+    def test_all_counts_positive(self):
+        img = mandelbrot_numpy(**self.PARAMS)
+        self.assertTrue((img > 0).all(), "Some counts are zero")
+ 
+ 
+class TestDocstrings(unittest.TestCase):
+    """Doctest-style tests embedded in function docstrings."""
+ 
+    def test_scalar_doctest(self):
+        import doctest
+        results = doctest.testmod(
+            m=__import__(__name__),
+            optionflags=doctest.ELLIPSIS,
+            verbose=False,
+        )
+        self.assertEqual(results.failed, 0,
+            f"{results.failed} doctest(s) failed")
+      
