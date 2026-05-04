@@ -151,4 +151,40 @@ def mandelbrot_dask(
                       for sl in slices]
     results = dask.compute(*delayed_chunks)
     return np.vstack(results)
+# Benchmarking harness
+# ─────────────────────────────────────────────────────────────────────────────
  
+DEFAULT_PARAMS = dict(xmin=-2.5, xmax=1.0, ymin=-1.25, ymax=1.25)
+SIZES = [(64, 64), (256, 256), (512, 512), (1024, 1024), (2048, 2048), (4096, 4096)]
+ 
+ 
+def run_benchmarks(sizes=None, max_iter=256):
+    if sizes is None:
+        sizes = SIZES
+ 
+    implementations = [
+        ("Naive",             mandelbrot_naive),
+        ("NumPy",             mandelbrot_numpy),
+        ("Multiprocessing",   partial(mandelbrot_multiprocessing, n_workers=4)),
+        ("Dask",              partial(mandelbrot_dask, chunk_size=128)),
+    ]
+ 
+    header = f"{'Impl':<20s}" + "".join(f"  {w}×{h}" for w, h in sizes)
+    print("\n" + "=" * len(header))
+    print(header)
+    print("-" * len(header))
+ 
+    for name, fn in implementations:
+        row = f"{name:<20s}"
+        for w, h in sizes:
+            if name == "Naive" and w > 256:
+                row += f"  {'skip':>8s}"
+                continue
+            t0 = time.perf_counter()
+            fn(**DEFAULT_PARAMS, width=w, height=h, max_iter=max_iter)
+            elapsed = time.perf_counter() - t0
+            row += f"  {elapsed:>7.3f}s"
+        print(row)
+ 
+    print("=" * len(header))
+     
