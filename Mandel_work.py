@@ -162,4 +162,93 @@ for sz in SIZES:
         print(f"  GPU (synthetic): kernel={timing['gpu_k'][sz]:.4f}s")
  
 print("\nAll timings collected.")
+
+
+
+header = (
+    f"{'Size':>6}  {'Naive':>9}  {'NumPy':>9}  {'MP-4':>9}  {'Dask':>9}  "
+    f"{'GPU kern':>10}  {'GPU tot':>10}  {'SU_np/k':>8}  {'SU_mp/k':>8}"
+)
+print(header)
+print("-" * 95)
  
+for sz in SIZES:
+    def fmt(v):
+        return f"{v:>9.4f}" if not np.isnan(v) else f"{'skip':>9}"
+ 
+    su_np = timing["numpy"][sz] / timing["gpu_k"][sz]
+    su_mp = (
+        timing["mp4"][sz] / timing["gpu_k"][sz]
+        if not np.isnan(timing["mp4"][sz])
+        else float("nan")
+    )
+    su_mp_str = f"{su_mp:>8.1f}x" if not np.isnan(su_mp) else f"{'n/a':>8}"
+    print(
+        f"{sz:>6}  {fmt(timing['naive'][sz])}  {fmt(timing['numpy'][sz])}  "
+        f"{fmt(timing['mp4'][sz])}  {fmt(timing['dask'][sz])}  "
+        f"{timing['gpu_k'][sz]:>10.4f}  {timing['gpu_t'][sz]:>10.4f}  "
+        f"{su_np:>8.1f}x  {su_mp_str}"
+    )
+
+
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+pixel_counts = [sz ** 2 for sz in SIZES]
+ 
+# ── Left: absolute timings ────────────────────────────────────────────────────
+ax = axes[0]
+ 
+def plot_line(key, label, color, marker, linestyle="-"):
+    vals = [timing[key][sz] for sz in SIZES]
+    mask = [not np.isnan(v) for v in vals]
+    xs   = [pixel_counts[i] for i, m in enumerate(mask) if m]
+    ys   = [vals[i]          for i, m in enumerate(mask) if m]
+    ax.loglog(xs, ys, marker=marker, color=color, linestyle=linestyle,
+              linewidth=2, markersize=7, label=label)
+ 
+plot_line("naive", "Naive (Python)",      "#e74c3c", "o")
+plot_line("numpy", "NumPy vectorised",    "#3498db", "s")
+plot_line("mp4",   "Multiproc (4w)",      "#2ecc71", "^")
+plot_line("dask",  "Dask",                "#f39c12", "D")
+plot_line("gpu_k", "GPU kernel",          "#9b59b6", "P", "-")
+plot_line("gpu_t", "GPU total (w/trans)", "#9b59b6", "x", "--")
+ 
+ax.set_xlabel("Pixels (W×H)")
+ax.set_ylabel("Time (s)")
+ax.set_title("Absolute execution time")
+ax.legend(fontsize=8)
+ax.grid(True, which="both", alpha=0.3)
+ 
+# ── Right: speedup vs NumPy ───────────────────────────────────────────────────
+ax2 = axes[1]
+ 
+for key, label, color, marker in [
+    ("mp4",   "Multiproc (4w)",      "#2ecc71", "^"),
+    ("dask",  "Dask",                "#f39c12", "D"),
+    ("gpu_k", "GPU kernel vs NumPy", "#9b59b6", "P"),
+    ("gpu_t", "GPU total vs NumPy",  "#9b59b6", "x"),
+]:
+    su = [
+        timing["numpy"][sz] / timing[key][sz]
+        for sz in SIZES
+        if not np.isnan(timing[key][sz])
+    ]
+    xs = [
+        pixel_counts[i]
+        for i, sz in enumerate(SIZES)
+        if not np.isnan(timing[key][sz])
+    ]
+    ls = "--" if "total" in label else "-"
+    ax2.semilogx(xs, su, marker=marker, color=color, linestyle=ls,
+                 linewidth=2, markersize=7, label=label)
+ 
+ax2.axhline(1, color="gray", linewidth=1, linestyle=":")
+ax2.set_xlabel("Pixels (W×H)")
+ax2.set_ylabel("Speedup over NumPy")
+ax2.set_title("Speedup relative to NumPy vectorised")
+ax2.legend(fontsize=8)
+ax2.grid(True, which="both", alpha=0.3)
+ 
+plt.tight_layout()
+plt.savefig("scaling_analysis.png", dpi=150)
+plt.close()
+
