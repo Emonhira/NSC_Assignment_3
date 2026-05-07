@@ -252,3 +252,43 @@ plt.tight_layout()
 plt.savefig("scaling_analysis.png", dpi=150)
 plt.close()
 
+if CUDA_AVAILABLE:
+    import numba
+    from Mandel_Cuda import mandelbrot_kernel_smem, BLOCK_SMEM
+ 
+    H = W = 512
+    tbp   = BLOCK_SMEM
+    bpg   = (
+        (H + tbp[0] - 1) // tbp[0],
+        (W + tbp[1] - 1) // tbp[1],
+    )
+ 
+    out_d   = cuda.device_array((H, W), dtype=np.int32)
+    means_d = cuda.device_array(bpg,    dtype=np.float32)
+ 
+    mandelbrot_kernel_smem[bpg, tbp](
+        out_d, means_d,
+        PARAMS["xmin"], PARAMS["xmax"],
+        PARAMS["ymin"], PARAMS["ymax"],
+        MAX_ITER,
+    )
+    cuda.synchronize()
+ 
+    means = means_d.copy_to_host()
+    print("Per-block mean iteration count (512×512 image):")
+    print(f"  Overall mean:    {means.mean():.1f}")
+    print(f"  Block-level std: {means.std():.1f} (high = heterogeneous workload)")
+ 
+    fig, ax = plt.subplots(figsize=(6, 4))
+    im = ax.imshow(means, cmap="plasma", aspect="equal")
+    ax.set_title("Per-block mean iteration count\n(shared-memory reduction)")
+    ax.set_xlabel("Block column")
+    ax.set_ylabel("Block row")
+    plt.colorbar(im, ax=ax, label="Mean iterations")
+    plt.tight_layout()
+    plt.savefig("smem_block_means.png", dpi=150)
+    plt.close()
+else:
+    print("Shared-memory demo skipped (no CUDA device).")
+
+    
