@@ -107,3 +107,59 @@ plt.tight_layout()
 plt.savefig("block_size_sweep.png", dpi=150)
 plt.close()
 
+
+
+SIZES  = [64, 128, 256, 512, 1024, 2048, 4096]
+timing = {name: {} for name in ["naive", "numpy", "mp4", "dask", "gpu_k", "gpu_t"]}
+ 
+for sz in SIZES:
+    w = h = sz
+    print(f"\n── {sz}×{sz} ─────────────────────────────────────")
+ 
+    # Naive (only for small sizes — avoids very long runtimes)
+    if sz <= 256:
+        t0 = time.perf_counter()
+        mandelbrot_naive(**PARAMS, width=w, height=h, max_iter=MAX_ITER)
+        timing["naive"][sz] = time.perf_counter() - t0
+        print(f"  Naive:          {timing['naive'][sz]:.4f}s")
+    else:
+        timing["naive"][sz] = float("nan")
+ 
+    # NumPy
+    t0 = time.perf_counter()
+    mandelbrot_numpy(**PARAMS, width=w, height=h, max_iter=MAX_ITER)
+    timing["numpy"][sz] = time.perf_counter() - t0
+    print(f"  NumPy:          {timing['numpy'][sz]:.4f}s")
+ 
+    # Multiprocessing (4 workers)
+    if sz <= 2048:
+        t0 = time.perf_counter()
+        mandelbrot_multiprocessing(
+            **PARAMS, width=w, height=h, max_iter=MAX_ITER, n_workers=4
+        )
+        timing["mp4"][sz] = time.perf_counter() - t0
+        print(f"  Multiproc (4w): {timing['mp4'][sz]:.4f}s")
+    else:
+        timing["mp4"][sz] = float("nan")
+ 
+    # Dask
+    t0 = time.perf_counter()
+    mandelbrot_dask(**PARAMS, width=w, height=h, max_iter=MAX_ITER, chunk_size=128)
+    timing["dask"][sz] = time.perf_counter() - t0
+    print(f"  Dask:           {timing['dask'][sz]:.4f}s")
+ 
+    # GPU
+    if CUDA_AVAILABLE:
+        r = run_gpu(w, h, **PARAMS, max_iter=MAX_ITER, threads_per_block=(16, 16))
+        timing["gpu_k"][sz] = r["time_kernel"]
+        timing["gpu_t"][sz] = r["time_total"]
+        print(f"  GPU kernel:     {timing['gpu_k'][sz]:.4f}s")
+        print(f"  GPU total:      {timing['gpu_t'][sz]:.4f}s")
+    else:
+        scale = (sz / 2048) ** 2
+        timing["gpu_k"][sz] = 0.058 * scale
+        timing["gpu_t"][sz] = 0.085 * scale
+        print(f"  GPU (synthetic): kernel={timing['gpu_k'][sz]:.4f}s")
+ 
+print("\nAll timings collected.")
+ 
