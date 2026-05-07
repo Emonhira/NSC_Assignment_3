@@ -56,7 +56,7 @@ plt.close()
 import pytest
  
 result = pytest.main([
-    "mandelbrot_implementations.py",
+    "Mandel_implementation.py",
     "-v", "--tb=short", "-q",
 ])
 print(f"\npytest exit code: {result}  (0 = all passed)")
@@ -291,4 +291,3 @@ if CUDA_AVAILABLE:
 else:
     print("Shared-memory demo skipped (no CUDA device).")
 
-    
